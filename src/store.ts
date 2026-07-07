@@ -58,6 +58,11 @@ export const store = {
     return orders.get(id) ?? this.upsertOrder(id, "created", {});
   },
 
+  /** Snapshot of every order — used by the dashboard/simulator. */
+  listOrders(): Order[] {
+    return [...orders.values()];
+  },
+
   // ── fleet ───────────────────────────────────────────────────────────────
   getVehicle(id: string): Vehicle | undefined {
     return vehicles.get(id);

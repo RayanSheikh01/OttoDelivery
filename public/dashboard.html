@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Otto Dispatch</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0e13;
+    --panel: #11161e;
+    --panel-2: #161c26;
+    --line: #1f2733;
+    --line-soft: #172029;
+    --ink: #e8edf4;
+    --muted: #7f8a9b;
+    --faint: #5a6474;
+    --amber: #ffb000;
+    --amber-dim: #b87c08;
+    --idle: #35d6a4;
+    --busy: #ffb000;
+    --offline: #59647a;
+    --s-created: #8592a4;
+    --s-routed: #45b8f0;
+    --s-assigned: #8b8cf6;
+    --s-ofd: #ffb000;
+    --s-delivered: #35d6a4;
+    --s-exception: #ff5d6c;
+    --s-cancelled: #4a5568;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+    --disp: "Space Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--disp);
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── top bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #0e131b, #0b0e13);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand .mark {
+    font-weight: 700; font-size: 19px; letter-spacing: 2px;
+    color: var(--amber); text-transform: uppercase;
+  }
+  .brand .sub {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .live {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--idle); box-shadow: 0 0 0 0 rgba(53,214,164,.6);
+  }
+  .dot.pulse { animation: pulse 1.8s infinite; }
+  .dot.paused { background: var(--muted); animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(53,214,164,.55); }
+    70% { box-shadow: 0 0 0 7px rgba(53,214,164,0); }
+    100% { box-shadow: 0 0 0 0 rgba(53,214,164,0); }
+  }
+
+  .stats { display: flex; gap: 26px; margin-left: auto; }
+  .stat { text-align: right; }
+  .stat .n { font-family: var(--mono); font-size: 20px; font-weight: 600; line-height: 1; }
+  .stat .l { font-size: 10px; letter-spacing: 1.4px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+  .stat.amber .n { color: var(--amber); }
+  .stat.green .n { color: var(--idle); }
+
+  .controls { display: flex; gap: 8px; margin-left: 26px; }
+  button {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+    text-transform: uppercase; cursor: pointer;
+    background: var(--panel-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px 12px; transition: border-color .15s, background .15s, color .15s;
+  }
+  button:hover { border-color: var(--amber-dim); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  button.primary { border-color: var(--amber-dim); color: var(--amber); }
+  button.primary:hover { background: rgba(255,176,0,.08); }
+
+  /* ── body layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 288px 1fr 340px;
+    min-height: 0;
+  }
+  aside {
+    background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  aside.left { border-right: 1px solid var(--line); }
+  aside.right { border-left: 1px solid var(--line); }
+  .panel-head {
+    padding: 13px 16px; border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+    color: var(--muted); text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-head .count { color: var(--amber); }
+  .scroll { overflow-y: auto; min-height: 0; flex: 1; }
+  .scroll::-webkit-scrollbar { width: 8px; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+  /* ── fleet rows ── */
+  .veh {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px;
+    padding: 11px 16px; border-bottom: 1px solid var(--line-soft);
+  }
+  .veh .top { display: flex; align-items: center; gap: 8px; }
+  .veh .id { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+  .veh .type { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+  .veh .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); grid-column: 1 / -1; }
+  .veh .meta b { color: #aeb8c6; font-weight: 500; }
+  .pill {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .5px;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+    border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .pill.idle { color: var(--idle); border-color: rgba(53,214,164,.35); background: rgba(53,214,164,.08); }
+  .pill.busy { color: var(--busy); border-color: rgba(255,176,0,.35); background: rgba(255,176,0,.08); }
+  .pill.offline { color: var(--muted); border-color: rgba(127,138,155,.3); background: rgba(127,138,155,.06); }
+
+  /* ── map ── */
+  #map { position: relative; }
+  .no-token {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; background: var(--bg); text-align: center; padding: 20px; z-index: 5;
+  }
+  .no-token.show { display: flex; }
+  .no-token .h { font-size: 16px; color: var(--amber); }
+  .no-token .p { font-family: var(--mono); font-size: 12px; color: var(--muted); max-width: 360px; line-height: 1.6; }
+  .legend {
+    position: absolute; left: 14px; bottom: 14px; z-index: 4;
+    background: rgba(11,14,19,.82); border: 1px solid var(--line);
+    border-radius: 6px; padding: 10px 12px; backdrop-filter: blur(6px);
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+  }
+  .legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+  .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* ── order tickets ── */
+  .ticket {
+    padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
+    border-left: 3px solid var(--line);
+  }
+  .ticket .r1 { display: flex; align-items: center; justify-content: space-between; }
+  .ticket .oid { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .ticket .items { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+  .ticket .r3 { display: flex; justify-content: space-between; margin-top: 7px; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .badge {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .6px;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+    color: #0b0e13; font-weight: 600;
+  }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+  @media (max-width: 940px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 200px 1fr 220px; }
+    aside.left { border-right: none; border-bottom: 1px solid var(--line); }
+    aside.right { border-left: none; border-top: 1px solid var(--line); }
+    .stats { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark">Otto</span>
+    <span class="sub">Dispatch Console</span>
+  </div>
+  <span class="live"><span id="liveDot" class="dot pulse"></span><span id="liveTxt">Live</span></span>
+
+  <div class="stats">
+    <div class="stat amber"><div class="n" id="stActive">0</div><div class="l">In Flight</div></div>
+    <div class="stat green"><div class="n" id="stDelivered">0</div><div class="l">Delivered</div></div>
+    <div class="stat"><div class="n" id="stIdle">0</div><div class="l">Idle Units</div></div>
+    <div class="stat"><div class="n" id="stBusy">0</div><div class="l">On Route</div></div>
+  </div>
+
+  <div class="controls">
+    <button id="btnToggle" class="primary">Pause</button>
+    <button id="btnSpawn">+ Order</button>
+    <button id="btnReset">Reset</button>
+  </div>
+</header>
+
+<main>
+  <aside class="left">
+    <div class="panel-head">Fleet <span class="count" id="fleetCount">0</span></div>
+    <div class="scroll" id="fleet"></div>
+  </aside>
+
+  <div id="map">
+    <div class="no-token" id="noToken">
+      <div class="h">Map tiles unavailable</div>
+      <div class="p">Set <b>MAPBOX_TOKEN</b> in <b>.env</b> and restart to render the map. The dispatch board and simulator keep running without it.</div>
+    </div>
+    <div class="legend">
+      <div class="row"><i style="background:#35d6a4"></i> idle unit</div>
+      <div class="row"><i style="background:#ffb000"></i> on route</div>
+      <div class="row"><i style="background:#45b8f0"></i> drop pending</div>
+      <div class="row"><i style="background:#ff5d6c"></i> exception</div>
+    </div>
+  </div>
+
+  <aside class="right">
+    <div class="panel-head">Order Feed <span class="count" id="orderCount">0</span></div>
+    <div class="scroll" id="orders"></div>
+  </aside>
+</main>
+
+<script>
+const STATUS_COLOR = {
+  created: "#8592a4", confirmed: "#8592a4", routed: "#45b8f0", assigned: "#8b8cf6",
+  out_for_delivery: "#ffb000", delivered: "#35d6a4", exception: "#ff5d6c",
+  failed: "#ff5d6c", cancelled: "#4a5568",
+};
+const VEH_COLOR = { idle: "#35d6a4", busy: "#ffb000", offline: "#59647a" };
+const ACTIVE = new Set(["created", "confirmed", "routed", "assigned", "out_for_delivery", "exception"]);
+
+let map = null, mapReady = false;
+
+async function boot() {
+  const cfg = await fetch("/api/config").then(r => r.json());
+  if (cfg.mapboxToken) {
+    initMap(cfg);
+  } else {
+    document.getElementById("noToken").classList.add("show");
+  }
+  const es = new EventSource("/api/events");
+  es.onmessage = e => render(JSON.parse(e.data));
+}
+
+function initMap(cfg) {
+  mapboxgl.accessToken = cfg.mapboxToken;
+  map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/dark-v11",
+    center: [cfg.service.center.lng, cfg.service.center.lat],
+    zoom: 11.2,
+    attributionControl: false,
+  });
+  map.on("load", () => {
+    // service area ring
+    map.addSource("area", { type: "geojson", data: ring(cfg.service.center, cfg.service.radiusM) });
+    map.addLayer({ id: "area-line", type: "line", source: "area",
+      paint: { "line-color": "#8592a4", "line-opacity": 0.22, "line-dasharray": [3, 3] } });
+
+    empty("lines"); empty("drops"); empty("vehicles");
+    map.addLayer({ id: "lines", type: "line", source: "lines",
+      paint: { "line-color": "#ffb000", "line-width": 1.3, "line-opacity": 0.5, "line-dasharray": [1.5, 1.5] } });
+    map.addLayer({ id: "drops", type: "circle", source: "drops",
+      paint: { "circle-radius": 5, "circle-color": ["get", "color"],
+        "circle-stroke-width": 1.5, "circle-stroke-color": "#0b0e13" } });
+    map.addLayer({ id: "veh-glow", type: "circle", source: "vehicles",
+      paint: { "circle-radius": 11, "circle-color": ["get", "color"], "circle-opacity": 0.16 } });
+    map.addLayer({ id: "veh", type: "circle", source: "vehicles",
+      paint: { "circle-radius": 6, "circle-color": ["get", "color"],
+        "circle-stroke-width": 2, "circle-stroke-color": "#0b0e13" } });
+    mapReady = true;
+  });
+}
+
+function empty(id) { map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } }); }
+
+function ring(c, radiusM, n = 64) {
+  const coords = [];
+  const dLat = radiusM / 111320;
+  const dLng = radiusM / (111320 * Math.cos(c.lat * Math.PI / 180));
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * 2 * Math.PI;
+    coords.push([c.lng + dLng * Math.cos(a), c.lat + dLat * Math.sin(a)]);
+  }
+  return { type: "Feature", geometry: { type: "Polygon", coordinates: [coords] } };
+}
+
+function fc(features) { return { type: "FeatureCollection", features }; }
+function pt(lng, lat, props) { return { type: "Feature", properties: props, geometry: { type: "Point", coordinates: [lng, lat] } }; }
+
+function render(snap) {
+  const { orders, vehicles, running } = snap;
+  const byId = Object.fromEntries(vehicles.map(v => [v.id, v]));
+
+  // live indicator
+  const dot = document.getElementById("liveDot");
+  dot.className = running ? "dot pulse" : "dot paused";
+  document.getElementById("liveTxt").textContent = running ? "Live" : "Paused";
+  document.getElementById("btnToggle").textContent = running ? "Pause" : "Resume";
+
+  // stats
+  const active = orders.filter(o => ACTIVE.has(o.status));
+  document.getElementById("stActive").textContent = active.length;
+  document.getElementById("stDelivered").textContent = orders.filter(o => o.status === "delivered").length;
+  document.getElementById("stIdle").textContent = vehicles.filter(v => v.status === "idle").length;
+  document.getElementById("stBusy").textContent = vehicles.filter(v => v.status === "busy").length;
+
+  renderFleet(vehicles);
+  renderOrders(orders);
+  renderMap(orders, byId);
+}
+
+function renderFleet(vehicles) {
+  document.getElementById("fleetCount").textContent = vehicles.length;
+  const el = document.getElementById("fleet");
+  el.innerHTML = "";
+  for (const v of vehicles) {
+    const row = document.createElement("div");
+    row.className = "veh";
+    row.innerHTML = `
+      <div class="top">
+        <span class="id">${v.id}</span>
+        <span class="type">${v.type}</span>
+      </div>
+      <span class="pill ${v.status}" data-id="${v.id}" data-status="${v.status}" title="click to toggle offline">${v.status}</span>
+      <div class="meta">cap <b>${v.free_capacity}</b> · ${v.assigned_order ? "→ <b>" + v.assigned_order + "</b>" : "unassigned"}</div>`;
+    el.appendChild(row);
+  }
+  el.querySelectorAll(".pill").forEach(p => p.addEventListener("click", toggleVehicle));
+}
+
+async function toggleVehicle(e) {
+  const id = e.target.dataset.id;
+  const cur = e.target.dataset.status;
+  const status = cur === "offline" ? "idle" : "offline"; // simple ops toggle
+  await fetch("/api/fleet", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, status }) });
+}
+
+function renderOrders(orders) {
+  const feed = [...orders].sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || "")).slice(0, 40);
+  document.getElementById("orderCount").textContent = orders.filter(o => ACTIVE.has(o.status)).length;
+  const el = document.getElementById("orders");
+  if (!feed.length) { el.innerHTML = '<div class="empty">Waiting for orders…</div>'; return; }
+  el.innerHTML = "";
+  for (const o of feed) {
+    const color = STATUS_COLOR[o.status] || "#8592a4";
+    const items = (o.items || []).map(i => `${i.qty}× ${i.name}`).join(", ") || "—";
+    const label = String(o.status).replace(/_/g, " ");
+    const card = document.createElement("div");
+    card.className = "ticket";
+    card.style.borderLeftColor = color;
+    card.innerHTML = `
+      <div class="r1">
+        <span class="oid">${o.order_id}</span>
+        <span class="badge" style="background:${color}">${label}</span>
+      </div>
+      <div class="items">${items}</div>
+      <div class="r3">
+        <span>${o.assigned_vehicle ? "unit " + o.assigned_vehicle : "—"}</span>
+        <span>${o.drop_address || ""}</span>
+      </div>`;
+    el.appendChild(card);
+  }
+}
+
+function renderMap(orders, byId) {
+  if (!mapReady) return;
+  const vehicles = Object.values(byId);
+  map.getSource("vehicles").setData(fc(
+    vehicles.map(v => pt(v.location.lng, v.location.lat, { color: VEH_COLOR[v.status] }))
+  ));
+  const active = orders.filter(o => ACTIVE.has(o.status) && o.drop);
+  map.getSource("drops").setData(fc(
+    active.map(o => pt(o.drop.lng, o.drop.lat, { color: STATUS_COLOR[o.status] || "#8592a4" }))
+  ));
+  const lines = [];
+  for (const o of active) {
+    const v = o.assigned_vehicle ? byId[o.assigned_vehicle] : null;
+    if (v && o.drop) lines.push({ type: "Feature", properties: {},
+      geometry: { type: "LineString", coordinates: [[v.location.lng, v.location.lat], [o.drop.lng, o.drop.lat]] } });
+  }
+  map.getSource("lines").setData(fc(lines));
+}
+
+const post = a => fetch("/api/sim/" + a, { method: "POST" });
+document.getElementById("btnToggle").addEventListener("click", () =>
+  post(document.getElementById("btnToggle").textContent === "Pause" ? "pause" : "resume"));
+document.getElementById("btnSpawn").addEventListener("click", () => post("spawn"));
+document.getElementById("btnReset").addEventListener("click", () => post("reset"));
+
+boot();
+</script>
+</body>
+</html>
