@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "otto": {
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "otto-delivery-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OttoDelivery MCP server — shared order store, geocoding, routing, VRP, fleet, telemetry, geofence, notify, and payments tools.",
+  "bin": {
+    "otto-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
