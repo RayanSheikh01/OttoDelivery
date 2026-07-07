@@ -104,9 +104,44 @@
   /* ── body layout ── */
   main {
     display: grid;
+    grid-template-rows: 1fr auto;
+    min-height: 0;
+  }
+  .stage {
+    display: grid;
     grid-template-columns: 288px 1fr 340px;
     min-height: 0;
   }
+
+  /* ── agent pipeline bar ── */
+  .agentbar { border-top: 1px solid var(--line); background: var(--panel); }
+  .agentbar-head {
+    padding: 9px 16px 0; font-family: var(--mono); font-size: 11px;
+    letter-spacing: 2px; color: var(--muted); text-transform: uppercase;
+  }
+  .agents { display: flex; gap: 6px; padding: 10px 16px 12px; overflow-x: auto; }
+  .agent {
+    flex: 1 1 0; min-width: 104px;
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 9px 11px; background: var(--panel-2);
+    border-left: 2px solid var(--offline);
+  }
+  .agent.on { border-left-color: var(--idle); }
+  .agent.alert { border-left-color: var(--s-exception); }
+  .ah { display: flex; align-items: center; gap: 7px; }
+  .adot { width: 7px; height: 7px; border-radius: 50%; background: var(--offline); flex: none; }
+  .agent.on .adot { background: var(--idle); box-shadow: 0 0 0 0 rgba(53,214,164,.5); animation: pulse 1.8s infinite; }
+  .agent.alert .adot { background: var(--s-exception); animation: none; }
+  .aname { font-size: 13px; font-weight: 600; }
+  .acount {
+    margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--amber); background: rgba(255,176,0,.1);
+    border-radius: 999px; padding: 1px 8px;
+  }
+  .agent.alert .acount { color: var(--s-exception); background: rgba(255,93,108,.12); }
+  .anote { font-size: 11px; color: #aeb8c6; margin-top: 5px; line-height: 1.35; min-height: 15px; }
+  .agent.off .anote { color: var(--muted); }
+  .aid { font-family: var(--mono); font-size: 9px; letter-spacing: .5px; color: var(--faint); margin-top: 6px; text-transform: uppercase; }
   aside {
     background: var(--panel);
     display: flex; flex-direction: column; min-height: 0;
@@ -179,9 +214,10 @@
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
 
   @media (max-width: 940px) {
-    main { grid-template-columns: 1fr; grid-template-rows: 200px 1fr 220px; }
+    .stage { grid-template-columns: 1fr; grid-template-rows: 180px 1fr 200px; }
     aside.left { border-right: none; border-bottom: 1px solid var(--line); }
     aside.right { border-left: none; border-top: 1px solid var(--line); }
+    .agents { flex-wrap: nowrap; }
     .stats { display: none; }
   }
 </style>
@@ -209,6 +245,7 @@
 </header>
 
 <main>
+  <div class="stage">
   <aside class="left">
     <div class="panel-head">Fleet <span class="count" id="fleetCount">0</span></div>
     <div class="scroll" id="fleet"></div>
@@ -231,6 +268,12 @@
     <div class="panel-head">Order Feed <span class="count" id="orderCount">0</span></div>
     <div class="scroll" id="orders"></div>
   </aside>
+  </div>
+
+  <section class="agentbar">
+    <div class="agentbar-head">Agent Pipeline</div>
+    <div class="agents" id="agents"></div>
+  </section>
 </main>
 
 <script>
@@ -240,7 +283,32 @@ const STATUS_COLOR = {
   failed: "#ff5d6c", cancelled: "#4a5568",
 };
 const VEH_COLOR = { idle: "#35d6a4", busy: "#ffb000", offline: "#59647a" };
+const VEH_STATES = new Set(["idle", "busy", "offline"]);
 const ACTIVE = new Set(["created", "confirmed", "routed", "assigned", "out_for_delivery", "exception"]);
+
+// Escape any store-sourced string before putting it in innerHTML.
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// The 8 Otto subagents and how to read their live activity off order/vehicle state.
+// (The sim doesn't run the real Claude agents — it mirrors the pipeline each agent owns.)
+const AGENTS = [
+  { id: "delivery-orchestrator", short: "Orchestrator", role: "supervisor",
+    act: (o) => ({ n: o.active.length, note: o.active.length ? `supervising ${o.active.length} · ${o.delivered} done` : "awaiting orders" }) },
+  { id: "order-intake", short: "Order Intake", role: "intake",
+    act: (o) => ({ n: o.by.created + o.by.confirmed, note: (o.by.created + o.by.confirmed) ? `validating ${o.by.created + o.by.confirmed} address(es)` : "idle" }) },
+  { id: "routing-planner", short: "Routing", role: "routing",
+    act: (o) => ({ n: o.by.routed, note: o.by.routed ? `planning ${o.by.routed} route(s)` : "idle" }) },
+  { id: "fleet-dispatch", short: "Dispatch", role: "dispatch",
+    act: (o) => ({ n: o.by.assigned, note: o.by.assigned ? `assigning ${o.by.assigned} order(s)` : "idle" }) },
+  { id: "delivery-tracker", short: "Tracker", role: "tracking",
+    act: (o) => ({ n: o.by.out_for_delivery, note: o.by.out_for_delivery ? `tracking ${o.by.out_for_delivery} en route` : "idle" }) },
+  { id: "exception-recovery", short: "Exceptions", role: "exception",
+    act: (o) => ({ n: o.by.exception, alert: o.by.exception > 0, note: o.by.exception ? `recovering ${o.by.exception}` : "no exceptions" }) },
+  { id: "customer-comms", short: "Comms", role: "comms",
+    act: (o) => ({ n: o.notifs, note: o.notifs ? `${o.notifs} update(s) sent` : "idle" }) },
+  { id: "payment-settlement", short: "Payments", role: "payments",
+    act: (o) => ({ n: o.charges, note: o.charges ? `${o.charges} charge(s) settled` : "idle" }) },
+];
 
 let map = null, mapReady = false;
 
@@ -320,6 +388,7 @@ function render(snap) {
 
   renderFleet(vehicles);
   renderOrders(orders);
+  renderAgents(orders);
   renderMap(orders, byId);
 }
 
@@ -330,13 +399,15 @@ function renderFleet(vehicles) {
   for (const v of vehicles) {
     const row = document.createElement("div");
     row.className = "veh";
+    const st = VEH_STATES.has(v.status) ? v.status : "offline"; // whitelist before using as class
+    const cap = Number(v.free_capacity) || 0;
     row.innerHTML = `
       <div class="top">
-        <span class="id">${v.id}</span>
-        <span class="type">${v.type}</span>
+        <span class="id">${esc(v.id)}</span>
+        <span class="type">${esc(v.type)}</span>
       </div>
-      <span class="pill ${v.status}" data-id="${v.id}" data-status="${v.status}" title="click to toggle offline">${v.status}</span>
-      <div class="meta">cap <b>${v.free_capacity}</b> · ${v.assigned_order ? "→ <b>" + v.assigned_order + "</b>" : "unassigned"}</div>`;
+      <span class="pill ${st}" data-id="${esc(v.id)}" data-status="${st}" title="click to toggle offline">${st}</span>
+      <div class="meta">cap <b>${cap}</b> · ${v.assigned_order ? "→ <b>" + esc(v.assigned_order) + "</b>" : "unassigned"}</div>`;
     el.appendChild(row);
   }
   el.querySelectorAll(".pill").forEach(p => p.addEventListener("click", toggleVehicle));
@@ -357,23 +428,48 @@ function renderOrders(orders) {
   if (!feed.length) { el.innerHTML = '<div class="empty">Waiting for orders…</div>'; return; }
   el.innerHTML = "";
   for (const o of feed) {
-    const color = STATUS_COLOR[o.status] || "#8592a4";
-    const items = (o.items || []).map(i => `${i.qty}× ${i.name}`).join(", ") || "—";
-    const label = String(o.status).replace(/_/g, " ");
+    const color = STATUS_COLOR[o.status] || "#8592a4"; // fixed palette, not user data
+    const items = (o.items || []).map(i => `${Number(i.qty) || 0}× ${esc(i.name)}`).join(", ") || "—";
+    const label = esc(String(o.status).replace(/_/g, " "));
     const card = document.createElement("div");
     card.className = "ticket";
     card.style.borderLeftColor = color;
     card.innerHTML = `
       <div class="r1">
-        <span class="oid">${o.order_id}</span>
+        <span class="oid">${esc(o.order_id)}</span>
         <span class="badge" style="background:${color}">${label}</span>
       </div>
       <div class="items">${items}</div>
       <div class="r3">
-        <span>${o.assigned_vehicle ? "unit " + o.assigned_vehicle : "—"}</span>
-        <span>${o.drop_address || ""}</span>
+        <span>${o.assigned_vehicle ? "unit " + esc(o.assigned_vehicle) : "—"}</span>
+        <span>${esc(o.drop_address || "")}</span>
       </div>`;
     el.appendChild(card);
+  }
+}
+
+function renderAgents(orders) {
+  const by = { created: 0, confirmed: 0, routed: 0, assigned: 0, out_for_delivery: 0, delivered: 0, exception: 0, failed: 0, cancelled: 0 };
+  let notifs = 0, charges = 0;
+  for (const o of orders) {
+    if (o.status in by) by[o.status]++;
+    notifs += (o.notifications || []).length;
+    charges += (o.transactions || []).filter(t => t.kind === "charge").length;
+  }
+  const ctx = { by, active: orders.filter(o => ACTIVE.has(o.status)), delivered: by.delivered, notifs, charges };
+
+  const el = document.getElementById("agents");
+  el.innerHTML = "";
+  for (const a of AGENTS) {
+    const s = a.act(ctx);
+    const state = s.alert ? "alert" : s.n > 0 ? "on" : "off";
+    const tile = document.createElement("div");
+    tile.className = "agent " + state;
+    tile.innerHTML = `
+      <div class="ah"><span class="adot"></span><span class="aname">${esc(a.short)}</span>${s.n > 0 ? `<span class="acount">${s.n}</span>` : ""}</div>
+      <div class="anote">${esc(s.note)}</div>
+      <div class="aid">${esc(a.id)}</div>`;
+    el.appendChild(tile);
   }
 }
 

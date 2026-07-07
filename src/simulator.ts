@@ -180,6 +180,8 @@ export class Simulator extends EventEmitter {
 
       case "assigned":
         store.upsertOrder(o.order_id, "out_for_delivery", {});
+        // customer-comms: "on the way" update
+        this.logNotification(o.order_id, "Your order is on the way.");
         break;
 
       case "out_for_delivery": {
@@ -204,6 +206,9 @@ export class Simulator extends EventEmitter {
             assigned_order: null,
             free_capacity: v.free_capacity + 1,
           });
+          // customer-comms + payment-settlement close out the order
+          this.logNotification(o.order_id, "Delivered. Enjoy!");
+          this.logCharge(o.order_id);
         }
         break;
       }
@@ -215,6 +220,27 @@ export class Simulator extends EventEmitter {
       default:
         break; // delivered / cancelled / failed — terminal
     }
+  }
+
+  private logNotification(orderId: string, body: string): void {
+    const o = store.getOrder(orderId);
+    if (!o) return;
+    const notifications = [
+      ...o.notifications,
+      { notification_id: `ntf-${Math.random().toString(36).slice(2, 8)}`, channel: "sms" as const, to: "+15550000000", body, status: "dry_run", at: now() },
+    ];
+    store.upsertOrder(orderId, undefined, { notifications });
+  }
+
+  private logCharge(orderId: string): void {
+    const o = store.getOrder(orderId);
+    if (!o) return;
+    const amount = 8 + Math.round(Math.random() * 3400) / 100; // demo total
+    const transactions = [
+      ...o.transactions,
+      { transaction_id: `txn-${Math.random().toString(36).slice(2, 8)}`, kind: "charge" as const, amount, currency: "usd", status: "dry_run_succeeded", at: now() },
+    ];
+    store.upsertOrder(orderId, undefined, { transactions });
   }
 
   private nearestIdle(near?: LatLng): Vehicle | undefined {
