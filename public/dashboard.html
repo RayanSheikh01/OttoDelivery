@@ -242,6 +242,47 @@
   }
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
 
+  /* ── order detail drawer ── */
+  .ticket { cursor: pointer; }
+  .ticket:hover { background: var(--panel-2); }
+  .ticket.sel { background: var(--panel-2); }
+  .drawer {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 330px; z-index: 6;
+    background: var(--panel); border-left: 1px solid var(--line);
+    transform: translateX(105%); transition: transform .22s ease;
+    display: flex; flex-direction: column;
+    box-shadow: -12px 0 28px rgba(0,0,0,.45);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head {
+    padding: 13px 16px; border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .drawer-head .oid { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+  .drawer-head .x {
+    margin-left: auto; background: none; border: none; color: var(--muted);
+    font-size: 16px; padding: 2px 6px; cursor: pointer;
+  }
+  .drawer-head .x:hover { color: #fff; }
+  .drawer-body { overflow-y: auto; padding: 14px 16px; flex: 1; }
+  .d-sec { margin-bottom: 16px; }
+  .d-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 6px;
+  }
+  .d-items { font-size: 13px; line-height: 1.5; }
+  .d-addr { font-family: var(--mono); font-size: 12px; color: #aeb8c6; }
+  .d-unit { font-family: var(--mono); font-size: 12px; }
+  .drawer-body .muted { color: var(--muted); }
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li {
+    display: flex; gap: 10px; padding: 6px 0;
+    border-bottom: 1px solid var(--line-soft); font-size: 12px;
+  }
+  .tl .g { width: 16px; text-align: center; flex: none; font-family: var(--mono); }
+  .tl .t { flex: 1; line-height: 1.4; }
+  .tl .at { font-family: var(--mono); font-size: 10px; color: var(--faint); white-space: nowrap; }
+
   @media (max-width: 940px) {
     .stage { grid-template-columns: 1fr; grid-template-rows: 180px 1fr 200px; }
     aside.left { border-right: none; border-bottom: 1px solid var(--line); }
@@ -297,6 +338,14 @@
       <div class="row"><i style="background:#45b8f0"></i> drop pending</div>
       <div class="row"><i style="background:#ff5d6c"></i> exception</div>
     </div>
+    <div class="drawer" id="drawer">
+      <div class="drawer-head">
+        <span class="oid" id="dOid"></span>
+        <span class="badge" id="dBadge"></span>
+        <button class="x" id="dClose" title="close">✕</button>
+      </div>
+      <div class="drawer-body" id="dBody"></div>
+    </div>
   </div>
 
   <aside class="right">
@@ -346,9 +395,17 @@ const AGENTS = [
 ];
 
 let map = null, mapReady = false;
+let cfgGlobal = null;
+let lastSnap = null;
+let selectedOrderId = null;
+let routeDrawnFor = null; // Task 3 uses this; declared here so stubs run
+
+function drawRouteIfNeeded(o) {} // Task 3 replaces
+function clearRoute() {}          // Task 3 replaces
 
 async function boot() {
   const cfg = await fetch("/api/config").then(r => r.json());
+  cfgGlobal = cfg;
   const slider = document.getElementById("fleetSize");
   if (Number.isFinite(cfg.fleetMin)) slider.min = cfg.fleetMin;
   if (Number.isFinite(cfg.fleetMax)) slider.max = cfg.fleetMax;
@@ -408,6 +465,7 @@ function fc(features) { return { type: "FeatureCollection", features }; }
 function pt(lng, lat, props) { return { type: "Feature", properties: props, geometry: { type: "Point", coordinates: [lng, lat] } }; }
 
 function render(snap) {
+  lastSnap = snap;
   const { orders, vehicles, running } = snap;
   const byId = Object.fromEntries(vehicles.map(v => [v.id, v]));
 
@@ -429,6 +487,7 @@ function render(snap) {
   renderOrders(orders);
   renderAgents(orders);
   renderMap(orders, byId);
+  renderDrawer(orders, byId);
 }
 
 function renderFleet(vehicles) {
@@ -473,6 +532,8 @@ function renderOrders(orders) {
     const card = document.createElement("div");
     card.className = "ticket";
     card.style.borderLeftColor = color;
+    if (o.order_id === selectedOrderId) card.classList.add("sel");
+    card.addEventListener("click", () => selectOrder(o.order_id));
     card.innerHTML = `
       <div class="r1">
         <span class="oid">${esc(o.order_id)}</span>
@@ -485,6 +546,82 @@ function renderOrders(orders) {
       </div>`;
     el.appendChild(card);
   }
+}
+
+function selectOrder(id) {
+  selectedOrderId = id;
+  routeDrawnFor = null;
+  document.getElementById("drawer").classList.add("open");
+  if (lastSnap) {
+    const byId = Object.fromEntries(lastSnap.vehicles.map(v => [v.id, v]));
+    renderDrawer(lastSnap.orders, byId);
+  }
+}
+
+function closeDrawer() {
+  if (!selectedOrderId) return;
+  selectedOrderId = null;
+  document.getElementById("drawer").classList.remove("open");
+  clearRoute();
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? "" : d.toLocaleTimeString([], { hour12: false });
+}
+
+// Merge status history + notifications + charges into one time-ordered feed.
+function buildEvents(o) {
+  const ev = [];
+  const hist = (o.status_history && o.status_history.length)
+    ? o.status_history
+    : [{ status: o.status, at: o.updated_at }]; // legacy order: synthesize
+  for (const h of hist) ev.push({
+    at: h.at, glyph: "●", color: STATUS_COLOR[h.status] || "#8592a4",
+    html: esc(String(h.status).replace(/_/g, " ")),
+  });
+  for (const n of (o.notifications || [])) ev.push({
+    at: n.at, glyph: "✉", color: "#45b8f0",
+    html: `${esc(n.channel)} “${esc(n.body)}” <span class="muted">${esc(n.status)}</span>`,
+  });
+  for (const t of (o.transactions || [])) ev.push({
+    at: t.at, glyph: "$", color: t.kind === "refund" ? "#ff5d6c" : "#35d6a4",
+    html: `${esc(t.kind)} $${(Number(t.amount) || 0).toFixed(2)} <span class="muted">${esc(t.status)}</span>`,
+  });
+  return ev.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+}
+
+function renderDrawer(orders, byId) {
+  if (!selectedOrderId) return;
+  const o = orders.find(x => x.order_id === selectedOrderId);
+  if (!o) { closeDrawer(); return; }
+
+  const color = STATUS_COLOR[o.status] || "#8592a4";
+  document.getElementById("dOid").textContent = o.order_id;
+  const badge = document.getElementById("dBadge");
+  badge.textContent = String(o.status).replace(/_/g, " ");
+  badge.style.background = color;
+
+  const v = o.assigned_vehicle ? byId[o.assigned_vehicle] : null;
+  const unit = v
+    ? `<b>${esc(v.id)}</b> · ${esc(v.type)} · <span class="muted">${esc(v.status)}</span>`
+    : (o.assigned_vehicle ? esc(o.assigned_vehicle) : '<span class="muted">unassigned</span>');
+
+  const items = (o.items || [])
+    .map(i => `${Number(i.qty) || 0}× ${esc(i.name)}`).join("<br>") || "—";
+
+  const tl = buildEvents(o).map(e => `
+    <li><span class="g" style="color:${e.color}">${e.glyph}</span>
+        <span class="t">${e.html}</span>
+        <span class="at">${esc(fmtTime(e.at))}</span></li>`).join("");
+
+  document.getElementById("dBody").innerHTML = `
+    <div class="d-sec"><div class="d-label">Items</div><div class="d-items">${items}</div></div>
+    <div class="d-sec"><div class="d-label">Drop</div><div class="d-addr">${esc(o.drop_address || "—")}</div></div>
+    <div class="d-sec"><div class="d-label">Assigned Unit</div><div class="d-unit">${unit}</div></div>
+    <div class="d-sec"><div class="d-label">Event Log</div><ul class="tl">${tl}</ul></div>`;
+
+  drawRouteIfNeeded(o);
 }
 
 function renderAgents(orders) {
@@ -559,6 +696,14 @@ document.getElementById("btnToggle").addEventListener("click", () =>
   post(document.getElementById("btnToggle").textContent === "Pause" ? "pause" : "resume"));
 document.getElementById("btnSpawn").addEventListener("click", () => post("spawn"));
 document.getElementById("btnReset").addEventListener("click", () => post("reset"));
+
+document.getElementById("dClose").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+// click-away: any click on the map area outside the drawer closes it
+document.getElementById("map").addEventListener("click", e => {
+  if (e.target.closest && e.target.closest("#drawer")) return;
+  closeDrawer();
+});
 
 boot();
 </script>
