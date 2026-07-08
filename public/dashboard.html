@@ -230,7 +230,9 @@
   .ticket {
     padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
     border-left: 3px solid var(--line);
+    cursor: pointer;
   }
+  .ticket:hover, .ticket.sel { background: var(--panel-2); }
   .ticket .r1 { display: flex; align-items: center; justify-content: space-between; }
   .ticket .oid { font-family: var(--mono); font-size: 13px; font-weight: 600; }
   .ticket .items { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
@@ -243,9 +245,6 @@
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
 
   /* ── order detail drawer ── */
-  .ticket { cursor: pointer; }
-  .ticket:hover { background: var(--panel-2); }
-  .ticket.sel { background: var(--panel-2); }
   .drawer {
     position: absolute; top: 0; right: 0; bottom: 0; width: 330px; z-index: 6;
     background: var(--panel); border-left: 1px solid var(--line);
@@ -373,6 +372,9 @@ const ACTIVE = new Set(["created", "confirmed", "routed", "assigned", "out_for_d
 // Escape any store-sourced string before putting it in innerHTML.
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// Human-readable order status ("out_for_delivery" → "out for delivery").
+const statusLabel = s => String(s).replace(/_/g, " ");
+
 // The 8 Otto subagents and how to read their live activity off order/vehicle state.
 // (The sim doesn't run the real Claude agents — it mirrors the pipeline each agent owns.)
 const AGENTS = [
@@ -397,8 +399,10 @@ const AGENTS = [
 let map = null, mapReady = false;
 let cfgGlobal = null;
 let lastSnap = null;
+let lastById = {};        // vehicle index from the latest snapshot
 let selectedOrderId = null;
-let routeDrawnFor = null; // Task 3 uses this; declared here so stubs run
+let routeDrawnFor = null; // order_id the sel-route layer was last drawn for
+let lastDrawerKey = null; // skips drawer DOM rebuilds when nothing visible changed
 
 function dimBase(on) {
   if (!mapReady) return;
@@ -420,16 +424,15 @@ async function drawRouteIfNeeded(o) {
   let geom = { type: "Feature", properties: {}, geometry: {
     type: "LineString", coordinates: [[from.lng, from.lat], [to.lng, to.lat]] } };
   try {
-    if (cfgGlobal && cfgGlobal.mapboxToken) {
-      const u = "https://api.mapbox.com/directions/v5/mapbox/driving/"
-        + `${from.lng},${from.lat};${to.lng},${to.lat}`
-        + `?geometries=geojson&overview=full&access_token=${cfgGlobal.mapboxToken}`;
-      const r = await fetch(u);
-      if (r.ok) {
-        const j = await r.json();
-        if (j.routes && j.routes[0]) {
-          geom = { type: "Feature", properties: {}, geometry: j.routes[0].geometry };
-        }
+    // mapReady implies a token was present at boot (initMap only runs with one)
+    const u = "https://api.mapbox.com/directions/v5/mapbox/driving/"
+      + `${from.lng},${from.lat};${to.lng},${to.lat}`
+      + `?geometries=geojson&overview=full&access_token=${cfgGlobal.mapboxToken}`;
+    const r = await fetch(u);
+    if (r.ok) {
+      const j = await r.json();
+      if (j.routes && j.routes[0]) {
+        geom = { type: "Feature", properties: {}, geometry: j.routes[0].geometry };
       }
     }
   } catch { /* keep straight-line fallback */ }
@@ -512,7 +515,7 @@ function pt(lng, lat, props) { return { type: "Feature", properties: props, geom
 function render(snap) {
   lastSnap = snap;
   const { orders, vehicles, running } = snap;
-  const byId = Object.fromEntries(vehicles.map(v => [v.id, v]));
+  const byId = lastById = Object.fromEntries(vehicles.map(v => [v.id, v]));
 
   // live indicator
   const dot = document.getElementById("liveDot");
@@ -573,7 +576,7 @@ function renderOrders(orders) {
   for (const o of feed) {
     const color = STATUS_COLOR[o.status] || "#8592a4"; // fixed palette, not user data
     const items = (o.items || []).map(i => `${Number(i.qty) || 0}× ${esc(i.name)}`).join(", ") || "—";
-    const label = esc(String(o.status).replace(/_/g, " "));
+    const label = esc(statusLabel(o.status));
     const card = document.createElement("div");
     card.className = "ticket";
     card.style.borderLeftColor = color;
@@ -597,10 +600,7 @@ function selectOrder(id) {
   selectedOrderId = id;
   routeDrawnFor = null;
   document.getElementById("drawer").classList.add("open");
-  if (lastSnap) {
-    const byId = Object.fromEntries(lastSnap.vehicles.map(v => [v.id, v]));
-    renderDrawer(lastSnap.orders, byId);
-  }
+  if (lastSnap) renderDrawer(lastSnap.orders, lastById);
 }
 
 function closeDrawer() {
@@ -623,7 +623,7 @@ function buildEvents(o) {
     : [{ status: o.status, at: o.updated_at }]; // legacy order: synthesize
   for (const h of hist) ev.push({
     at: h.at, glyph: "●", color: STATUS_COLOR[h.status] || "#8592a4",
-    html: esc(String(h.status).replace(/_/g, " ")),
+    html: esc(statusLabel(h.status)),
   });
   for (const n of (o.notifications || [])) ev.push({
     at: n.at, glyph: "✉", color: "#45b8f0",
@@ -641,13 +641,19 @@ function renderDrawer(orders, byId) {
   const o = orders.find(x => x.order_id === selectedOrderId);
   if (!o) { closeDrawer(); return; }
 
+  const v = o.assigned_vehicle ? byId[o.assigned_vehicle] : null;
+
+  // Rebuild the DOM only when visible data changed — a wholesale innerHTML
+  // replace every tick would reset the event log's scroll position.
+  const key = `${o.order_id}|${o.updated_at}|${v ? v.status : ""}`;
+  if (key === lastDrawerKey) { drawRouteIfNeeded(o); return; }
+  lastDrawerKey = key;
+
   const color = STATUS_COLOR[o.status] || "#8592a4";
   document.getElementById("dOid").textContent = o.order_id;
   const badge = document.getElementById("dBadge");
-  badge.textContent = String(o.status).replace(/_/g, " ");
+  badge.textContent = statusLabel(o.status);
   badge.style.background = color;
-
-  const v = o.assigned_vehicle ? byId[o.assigned_vehicle] : null;
   const unit = v
     ? `<b>${esc(v.id)}</b> · ${esc(v.type)} · <span class="muted">${esc(v.status)}</span>`
     : (o.assigned_vehicle ? esc(o.assigned_vehicle) : '<span class="muted">unassigned</span>');
