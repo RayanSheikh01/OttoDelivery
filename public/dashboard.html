@@ -400,8 +400,50 @@ let lastSnap = null;
 let selectedOrderId = null;
 let routeDrawnFor = null; // Task 3 uses this; declared here so stubs run
 
-function drawRouteIfNeeded(o) {} // Task 3 replaces
-function clearRoute() {}          // Task 3 replaces
+function dimBase(on) {
+  if (!mapReady) return;
+  map.setPaintProperty("lines", "line-opacity", on ? 0.12 : 0.5);
+  map.setPaintProperty("drops", "circle-opacity", on ? 0.25 : 1);
+}
+
+// One Directions call per selection (pickup→drop is stable); the moving
+// vehicle dot conveys live progress. Falls back to a straight line when
+// Directions fails; skips entirely when the order has no drop yet.
+async function drawRouteIfNeeded(o) {
+  if (!mapReady) return;
+  if (routeDrawnFor === o.order_id) return;
+  const from = o.pickup, to = o.drop;
+  if (!from || !to) return; // no drop yet — retried on next tick's renderDrawer
+  routeDrawnFor = o.order_id;
+  dimBase(true);
+
+  let geom = { type: "Feature", properties: {}, geometry: {
+    type: "LineString", coordinates: [[from.lng, from.lat], [to.lng, to.lat]] } };
+  try {
+    if (cfgGlobal && cfgGlobal.mapboxToken) {
+      const u = "https://api.mapbox.com/directions/v5/mapbox/driving/"
+        + `${from.lng},${from.lat};${to.lng},${to.lat}`
+        + `?geometries=geojson&overview=full&access_token=${cfgGlobal.mapboxToken}`;
+      const r = await fetch(u);
+      if (r.ok) {
+        const j = await r.json();
+        if (j.routes && j.routes[0]) {
+          geom = { type: "Feature", properties: {}, geometry: j.routes[0].geometry };
+        }
+      }
+    }
+  } catch { /* keep straight-line fallback */ }
+
+  if (selectedOrderId !== o.order_id) return; // closed/changed mid-fetch
+  map.getSource("sel-route").setData(fc([geom]));
+}
+
+function clearRoute() {
+  routeDrawnFor = null;
+  if (!mapReady) return;
+  map.getSource("sel-route").setData(fc([]));
+  dimBase(false);
+}
 
 async function boot() {
   const cfg = await fetch("/api/config").then(r => r.json());
@@ -433,12 +475,15 @@ function initMap(cfg) {
     map.addLayer({ id: "area-line", type: "line", source: "area",
       paint: { "line-color": "#8592a4", "line-opacity": 0.22, "line-dasharray": [3, 3] } });
 
-    empty("lines"); empty("drops"); empty("vehicles");
+    empty("lines"); empty("drops"); empty("vehicles"); empty("sel-route");
     map.addLayer({ id: "lines", type: "line", source: "lines",
       paint: { "line-color": "#ffb000", "line-width": 1.3, "line-opacity": 0.5, "line-dasharray": [1.5, 1.5] } });
     map.addLayer({ id: "drops", type: "circle", source: "drops",
       paint: { "circle-radius": 5, "circle-color": ["get", "color"],
         "circle-stroke-width": 1.5, "circle-stroke-color": "#0b0e13" } });
+    map.addLayer({ id: "sel-route", type: "line", source: "sel-route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffb000", "line-width": 3, "line-opacity": 0.9 } });
     map.addLayer({ id: "veh-glow", type: "circle", source: "vehicles",
       paint: { "circle-radius": 11, "circle-color": ["get", "color"], "circle-opacity": 0.16 } });
     map.addLayer({ id: "veh", type: "circle", source: "vehicles",
