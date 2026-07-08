@@ -69,6 +69,7 @@ export class Simulator extends EventEmitter {
   private timer: NodeJS.Timeout | null = null;
   private seq = 0;
   private running = false;
+  private ticking = false; // re-entrancy guard: store I/O is async now
   readonly tickMs: number;
 
   constructor(tickMs = 2500) {
@@ -79,18 +80,18 @@ export class Simulator extends EventEmitter {
   start(): void {
     if (this.timer) return;
     this.running = true;
-    this.timer = setInterval(() => this.tick(), this.tickMs);
-    this.emitSnapshot();
+    this.timer = setInterval(() => void this.tick(), this.tickMs);
+    void this.emitSnapshot();
   }
 
   pause(): void {
     this.running = false;
-    this.emitSnapshot();
+    void this.emitSnapshot();
   }
 
   resume(): void {
     this.running = true;
-    this.emitSnapshot();
+    void this.emitSnapshot();
   }
 
   stop(): void {
@@ -103,43 +104,43 @@ export class Simulator extends EventEmitter {
     return this.running;
   }
 
-  snapshot(): Snapshot {
+  async snapshot(): Promise<Snapshot> {
     return {
-      orders: store.listOrders(),
-      vehicles: store.listVehicles(),
+      orders: await store.listOrders(),
+      vehicles: await store.listVehicles(),
       service: config.service,
       running: this.running,
       at: now(),
     };
   }
 
-  private emitSnapshot(): void {
-    this.emit("tick", this.snapshot());
+  private async emitSnapshot(): Promise<void> {
+    this.emit("tick", await this.snapshot());
   }
 
   /** Cancel every active order and return all vehicles to idle. */
-  reset(): void {
-    for (const o of store.listOrders()) {
+  async reset(): Promise<void> {
+    for (const o of await store.listOrders()) {
       if (ACTIVE.includes(o.status)) {
-        store.upsertOrder(o.order_id, "cancelled", { assigned_vehicle: null });
+        await store.upsertOrder(o.order_id, "cancelled", { assigned_vehicle: null });
       }
     }
-    for (const v of store.listVehicles()) {
-      store.setVehicle({ ...v, status: "idle", assigned_order: null });
+    for (const v of await store.listVehicles()) {
+      await store.setVehicle({ ...v, status: "idle", assigned_order: null });
     }
-    this.emitSnapshot();
+    await this.emitSnapshot();
   }
 
   /** Force-create one order immediately (demo button). */
-  spawnNow(): void {
-    this.spawn();
-    this.emitSnapshot();
+  async spawnNow(): Promise<void> {
+    await this.spawn();
+    await this.emitSnapshot();
   }
 
-  private spawn(): void {
+  private async spawn(): Promise<void> {
     const id = `ord-${String(++this.seq).padStart(4, "0")}`;
     const drop = randomPointWithin(config.service.center, SPAWN_MAX_M);
-    store.upsertOrder(id, "created", {
+    await store.upsertOrder(id, "created", {
       items: randomItems(),
       pickup: { ...config.service.center }, // depot / kitchen
       drop,
@@ -147,74 +148,78 @@ export class Simulator extends EventEmitter {
     });
   }
 
-  private tick(): void {
-    if (!this.running) return;
+  private async tick(): Promise<void> {
+    if (!this.running || this.ticking) return;
+    this.ticking = true;
+    try {
+      // Occasionally place a new order.
+      if (Math.random() < 0.55) await this.spawn();
 
-    // Occasionally place a new order.
-    if (Math.random() < 0.55) this.spawn();
-
-    for (const o of store.listOrders()) {
-      this.advance(o);
+      for (const o of await store.listOrders()) {
+        await this.advance(o);
+      }
+      await this.emitSnapshot();
+    } finally {
+      this.ticking = false;
     }
-    this.emitSnapshot();
   }
 
-  private advance(o: Order): void {
+  private async advance(o: Order): Promise<void> {
     switch (o.status) {
       case "created":
-        store.upsertOrder(o.order_id, "routed", {});
+        await store.upsertOrder(o.order_id, "routed", {});
         break;
 
       case "routed": {
-        const v = this.nearestIdle(o.drop);
+        const v = await this.nearestIdle(o.drop);
         if (!v) return; // no capacity — wait (visible backpressure)
-        store.setVehicle({
+        await store.setVehicle({
           ...v,
           status: "busy",
           assigned_order: o.order_id,
           free_capacity: Math.max(0, v.free_capacity - 1),
         });
-        store.upsertOrder(o.order_id, "assigned", { assigned_vehicle: v.id });
+        await store.upsertOrder(o.order_id, "assigned", { assigned_vehicle: v.id });
         break;
       }
 
       case "assigned":
-        store.upsertOrder(o.order_id, "out_for_delivery", {});
+        await store.upsertOrder(o.order_id, "out_for_delivery", {});
         // customer-comms: "on the way" update
-        this.logNotification(o.order_id, "Your order is on the way.");
+        await this.logNotification(o.order_id, "Your order is on the way.");
         break;
 
       case "out_for_delivery": {
-        const v = o.assigned_vehicle ? store.getVehicle(o.assigned_vehicle) : undefined;
+        const v = o.assigned_vehicle ? await store.getVehicle(o.assigned_vehicle) : undefined;
         const drop = o.drop as LatLng | undefined;
         if (!v || !drop) return;
 
         // rare hiccup, recovers next tick
         if (Math.random() < 0.04) {
-          store.upsertOrder(o.order_id, "exception", { exception_reason: "traffic delay" });
+          await store.upsertOrder(o.order_id, "exception", { exception_reason: "traffic delay" });
           return;
         }
 
         const next = moveToward(v.location, drop, STEP_M);
-        store.setVehicle({ ...v, location: next });
+        await store.setVehicle({ ...v, location: next });
 
         if (haversine(next, drop) <= ARRIVE_M) {
-          store.upsertOrder(o.order_id, "delivered", { eta: now(), delivered_at: now() });
-          store.setVehicle({
-            ...store.getVehicle(v.id)!,
+          await store.upsertOrder(o.order_id, "delivered", { eta: now(), delivered_at: now() });
+          await store.setVehicle({
+            ...(await store.getVehicle(v.id))!,
             status: "idle",
             assigned_order: null,
             free_capacity: v.free_capacity + 1,
           });
           // customer-comms + payment-settlement close out the order
-          this.logNotification(o.order_id, "Delivered. Enjoy!");
-          this.logCharge(o.order_id);
+          await this.logNotification(o.order_id, "Delivered. Enjoy!");
+          await this.logCharge(o.order_id);
         }
         break;
       }
 
       case "exception":
-        store.upsertOrder(o.order_id, "out_for_delivery", { exception_reason: null });
+        await store.upsertOrder(o.order_id, "out_for_delivery", { exception_reason: null });
         break;
 
       default:
@@ -222,31 +227,31 @@ export class Simulator extends EventEmitter {
     }
   }
 
-  private logNotification(orderId: string, body: string): void {
-    const o = store.getOrder(orderId);
+  private async logNotification(orderId: string, body: string): Promise<void> {
+    const o = await store.getOrder(orderId);
     if (!o) return;
     const notifications = [
       ...o.notifications,
       { notification_id: `ntf-${Math.random().toString(36).slice(2, 8)}`, channel: "sms" as const, to: "+15550000000", body, status: "dry_run", at: now() },
     ];
-    store.upsertOrder(orderId, undefined, { notifications });
+    await store.upsertOrder(orderId, undefined, { notifications });
   }
 
-  private logCharge(orderId: string): void {
-    const o = store.getOrder(orderId);
+  private async logCharge(orderId: string): Promise<void> {
+    const o = await store.getOrder(orderId);
     if (!o) return;
     const amount = 8 + Math.round(Math.random() * 3400) / 100; // demo total
     const transactions = [
       ...o.transactions,
       { transaction_id: `txn-${Math.random().toString(36).slice(2, 8)}`, kind: "charge" as const, amount, currency: "usd", status: "dry_run_succeeded", at: now() },
     ];
-    store.upsertOrder(orderId, undefined, { transactions });
+    await store.upsertOrder(orderId, undefined, { transactions });
   }
 
-  private nearestIdle(near?: LatLng): Vehicle | undefined {
-    const idle = store
-      .listVehicles()
-      .filter((v) => v.status === "idle" && v.free_capacity > 0);
+  private async nearestIdle(near?: LatLng): Promise<Vehicle | undefined> {
+    const idle = (await store.listVehicles()).filter(
+      (v) => v.status === "idle" && v.free_capacity > 0
+    );
     if (!near) return idle[0];
     return idle.sort((a, b) => haversine(a.location, near) - haversine(b.location, near))[0];
   }

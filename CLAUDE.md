@@ -20,8 +20,15 @@ There is **no test suite and no linter** — `typecheck` is the only automated c
 
 ## Architecture
 
-**Shared in-memory store is the backbone.** Because the whole server is one process, every tool reads/writes the same maps in `src/store.ts` (`orders`, `vehicles`, and a `paymentIdempotency` ledger). This is deliberate — it is the "shared order store every agent reads from." Consequences to keep in mind:
-- State resets on server restart (i.e. on every rebuild). Nothing is persisted.
+**Shared store is the backbone.** Every tool reads/writes the same store in `src/store.ts` (`orders`, `vehicles`, and a `paymentIdempotency` ledger) — the "shared order store every agent reads from." The store has **two backends** (`src/redis.ts`), chosen at boot by whether `REDIS_URL` is set:
+
+- **Redis set** → Redis hashes (`otto:orders`, `otto:vehicles`, `otto:idem`) are the source of truth. State persists across restarts/rebuilds and is shared across processes (MCP server + dashboard on the same Redis). Run one with `docker run -d -p 6379:6379 redis:7-alpine`, then set `REDIS_URL=redis://localhost:6379` in `.env`.
+- **Redis unset** → in-memory Maps. Single-process, resets on every restart. Same "degrade gracefully" property the notify/stripe providers use.
+
+Consequences to keep in mind:
+
+- Every `store.*` method is **async** (`await` required) — this is why the tool handlers, the simulator tick loop, and the dashboard all await store calls.
+- Read-modify-write is not atomic across the `await` boundary under Redis (upsertOrder, the fleet double-assign guard, payment idempotency). Fine for a single agent driving the server (effectively serial); harden with WATCH/Lua for concurrent clients.
 - `store.upsertOrder` is last-write-wins and never deletes; `order_id` is never rewritten by a patch. Orders carry a free-form `[key: string]: unknown` patch surface, so `state.write` can stash spec-open fields without a schema change.
 - `seedFleet()` runs at boot to populate 5 demo vehicles so `fleet.*` returns something on a fresh process.
 

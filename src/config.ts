@@ -29,6 +29,11 @@ export const config = {
   mapProvider: (process.env.MAP_PROVIDER || "mapbox").toLowerCase(),
   mapboxToken: process.env.MAPBOX_TOKEN || "",
 
+  // Redis persistence. When unset, the store falls back to in-memory Maps
+  // (single-process, resets on restart) — same "degrade gracefully" property
+  // as the notify/stripe providers.
+  redisUrl: process.env.REDIS_URL || "",
+
   service: {
     center: {
       lat: num("OTTO_SERVICE_CENTER_LAT", 40.7128),

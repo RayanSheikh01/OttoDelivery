@@ -48,7 +48,6 @@ const etaFrom = (durationS: number, departAt?: string): string => {
   return new Date(base + durationS * 1000).toISOString();
 };
 
-seedFleet();
 const server = new McpServer({ name: "otto", version: "0.1.0" });
 
 // ═══ state ════════════════════════════════════════════════════════════════
@@ -61,8 +60,8 @@ server.registerTool(
     inputSchema: { order_id: z.string() },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
-  guard(({ order_id }: { order_id: string }) => {
-    const o = store.getOrder(order_id);
+  guard(async ({ order_id }: { order_id: string }) => {
+    const o = await store.getOrder(order_id);
     if (!o) throw new ToolError("not_found", `No order ${order_id}.`);
     return o;
   })
@@ -250,9 +249,8 @@ server.registerTool(
 );
 
 // ═══ fleet ════════════════════════════════════════════════════════════════
-function availableVehicles(near?: LatLng, radiusM?: number, minCap?: number, type?: string): Vehicle[] {
-  return store
-    .listVehicles()
+async function availableVehicles(near?: LatLng, radiusM?: number, minCap?: number, type?: string): Promise<Vehicle[]> {
+  return (await store.listVehicles())
     .filter((v) => v.status === "idle")
     .filter((v) => (minCap ? v.free_capacity >= minCap : true))
     .filter((v) => (type ? v.type === type : true))
@@ -275,8 +273,8 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
-  guard((a: { near?: LatLng; radius_m?: number; min_capacity?: number; vehicle_type?: string }) =>
-    availableVehicles(a.near, a.radius_m, a.min_capacity, a.vehicle_type).map(
+  guard(async (a: { near?: LatLng; radius_m?: number; min_capacity?: number; vehicle_type?: string }) =>
+    (await availableVehicles(a.near, a.radius_m, a.min_capacity, a.vehicle_type)).map(
       ({ id, type, location, free_capacity, status }) => ({ id, type, location, free_capacity, status })
     )
   )
@@ -291,8 +289,8 @@ server.registerTool(
     inputSchema: { order_id: z.string(), vehicle_id: z.string().optional() },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
-  guard((a: { order_id: string; vehicle_id?: string }) => {
-    const order = store.ensureOrder(a.order_id);
+  guard(async (a: { order_id: string; vehicle_id?: string }) => {
+    const order = await store.ensureOrder(a.order_id);
 
     // Double-assignment guard: already has a live assignment → return it.
     if (order.assigned_vehicle) {
@@ -302,12 +300,12 @@ server.registerTool(
     const near = (order.drop ?? order.pickup) as LatLng | undefined;
     let vehicle: Vehicle | undefined;
     if (a.vehicle_id) {
-      vehicle = store.getVehicle(a.vehicle_id);
+      vehicle = await store.getVehicle(a.vehicle_id);
       if (!vehicle) throw new ToolError("not_found", `No vehicle ${a.vehicle_id}.`);
       if (vehicle.status !== "idle")
         return { assigned: false, reason: `vehicle ${a.vehicle_id} is ${vehicle.status}` };
     } else {
-      vehicle = availableVehicles(near, undefined, 1)[0];
+      vehicle = (await availableVehicles(near, undefined, 1))[0];
       if (!vehicle) return { assigned: false, reason: "all_busy_or_no_capacity" };
     }
 
@@ -315,8 +313,8 @@ server.registerTool(
     vehicle.status = "busy";
     vehicle.free_capacity = Math.max(0, vehicle.free_capacity - 1);
     vehicle.assigned_order = a.order_id;
-    store.setVehicle(vehicle);
-    store.upsertOrder(a.order_id, "assigned", { assigned_vehicle: vehicle.id });
+    await store.setVehicle(vehicle);
+    await store.upsertOrder(a.order_id, "assigned", { assigned_vehicle: vehicle.id });
 
     const why = near ? `nearest idle ${vehicle.type} with capacity` : `idle ${vehicle.type} with capacity`;
     return { assigned: true, assigned_vehicle: vehicle.id, reason: why };
@@ -333,15 +331,15 @@ server.registerTool(
     inputSchema: { order_id: z.string().optional(), vehicle_id: z.string().optional() },
     annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
   },
-  guard((a: { order_id?: string; vehicle_id?: string }) => {
+  guard(async (a: { order_id?: string; vehicle_id?: string }) => {
     if (!a.order_id && !a.vehicle_id)
       throw new ToolError("invalid_input", "Provide order_id or vehicle_id.");
 
-    const order = a.order_id ? store.getOrder(a.order_id) : undefined;
+    const order = a.order_id ? await store.getOrder(a.order_id) : undefined;
     if (a.order_id && !order) throw new ToolError("not_found", `No order ${a.order_id}.`);
 
     const vehId = order?.assigned_vehicle ?? a.vehicle_id ?? undefined;
-    const veh = vehId ? store.getVehicle(vehId) : undefined;
+    const veh = vehId ? await store.getVehicle(vehId) : undefined;
 
     if (!veh?.location || !order?.pickup || !order?.drop) {
       return { live: false, reason: "no_live_fix", last_update: null };
@@ -377,11 +375,11 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
-  guard((a: { lat: number; lng: number; order_id?: string; fences?: { name: string; lat: number; lng: number; radius_m: number }[] }) => {
+  guard(async (a: { lat: number; lng: number; order_id?: string; fences?: { name: string; lat: number; lng: number; radius_m: number }[] }) => {
     const here: LatLng = { lat: a.lat, lng: a.lng };
     let fences = a.fences ?? [];
     if (a.order_id) {
-      const o = store.getOrder(a.order_id);
+      const o = await store.getOrder(a.order_id);
       if (!o) throw new ToolError("not_found", `No order ${a.order_id}.`);
       if (o.pickup) fences.push({ name: "arrived_at_pickup", lat: o.pickup.lat, lng: o.pickup.lng, radius_m: 50 });
       if (o.drop) {
@@ -416,7 +414,7 @@ server.registerTool(
     const r = await notify.send(a.channel, a.to, a.body);
     const notification_id = `ntf_${r.provider_id}`;
     if (a.order_id) {
-      const o = store.ensureOrder(a.order_id);
+      const o = await store.ensureOrder(a.order_id);
       o.notifications.push({
         notification_id,
         channel: a.channel,
@@ -425,7 +423,7 @@ server.registerTool(
         status: r.status,
         at: now(),
       });
-      store.upsertOrder(a.order_id, undefined, { notifications: o.notifications });
+      await store.upsertOrder(a.order_id, undefined, { notifications: o.notifications });
     }
     return { notification_id, status: r.status };
   })
@@ -447,7 +445,7 @@ server.registerTool(
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
   },
   guard(async (a: { order_id: string; amount: number; currency: string; idempotency_key: string }) => {
-    const prior = store.getIdempotent(a.idempotency_key);
+    const prior = await store.getIdempotent(a.idempotency_key);
     if (prior) return { ...(prior as object), replayed: true };
 
     let result: { transaction_id: string; status: string };
@@ -463,7 +461,7 @@ server.registerTool(
       result = { transaction_id: r.transaction_id, status: r.status };
     }
 
-    const o = store.ensureOrder(a.order_id);
+    const o = await store.ensureOrder(a.order_id);
     o.transactions.push({
       transaction_id: result.transaction_id,
       kind: "charge",
@@ -473,8 +471,8 @@ server.registerTool(
       idempotency_key: a.idempotency_key,
       at: now(),
     });
-    store.upsertOrder(a.order_id, undefined, { transactions: o.transactions });
-    store.setIdempotent(a.idempotency_key, result);
+    await store.upsertOrder(a.order_id, undefined, { transactions: o.transactions });
+    await store.setIdempotent(a.idempotency_key, result);
     return result;
   })
 );
@@ -495,10 +493,10 @@ server.registerTool(
   },
   guard(async (a: { order_id: string; amount?: number; reason: string; idempotency_key?: string }) => {
     if (a.idempotency_key) {
-      const prior = store.getIdempotent(a.idempotency_key);
+      const prior = await store.getIdempotent(a.idempotency_key);
       if (prior) return { ...(prior as object), replayed: true };
     }
-    const o = store.getOrder(a.order_id);
+    const o = await store.getOrder(a.order_id);
     if (!o) throw new ToolError("not_found", `No order ${a.order_id}.`);
 
     const charge = [...o.transactions].reverse().find(
@@ -544,14 +542,15 @@ server.registerTool(
       ref: charge.transaction_id,
       at: now(),
     });
-    store.upsertOrder(a.order_id, undefined, { transactions: o.transactions });
-    if (a.idempotency_key) store.setIdempotent(a.idempotency_key, result);
+    await store.upsertOrder(a.order_id, undefined, { transactions: o.transactions });
+    if (a.idempotency_key) await store.setIdempotent(a.idempotency_key, result);
     return result;
   })
 );
 
 // ── boot ─────────────────────────────────────────────────────────────────
 async function main() {
+  await seedFleet(); // populate demo fleet before any tool can fire
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // stderr only — stdout is the MCP channel and must stay clean.

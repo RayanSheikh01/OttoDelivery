@@ -3,7 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 
 import { config } from "./config.js";
-import { store, seedFleet } from "./store.js";
+import { store, seedFleet, scaleFleet } from "./store.js";
+import { FLEET_MIN, FLEET_MAX } from "./redis.js";
 import { Simulator, type Snapshot } from "./simulator.js";
 import type { VehicleStatus } from "./types.js";
 
@@ -17,7 +18,6 @@ import type { VehicleStatus } from "./types.js";
 const PORT = Number(process.env.OTTO_DASHBOARD_PORT) || 3000;
 const HTML_URL = new URL("../public/dashboard.html", import.meta.url);
 
-seedFleet();
 const sim = new Simulator();
 
 // ── SSE fan-out ─────────────────────────────────────────────────────────────
@@ -59,13 +59,13 @@ const server = createServer(async (req, res) => {
 
     // ── config (token + service area for the map) ──
     if (req.method === "GET" && path === "/api/config") {
-      json(res, 200, { mapboxToken: config.mapboxToken, service: config.service, tickMs: sim.tickMs });
+      json(res, 200, { mapboxToken: config.mapboxToken, service: config.service, tickMs: sim.tickMs, fleetMin: FLEET_MIN, fleetMax: FLEET_MAX });
       return;
     }
 
     // ── snapshot ──
     if (req.method === "GET" && path === "/api/state") {
-      json(res, 200, sim.snapshot());
+      json(res, 200, await sim.snapshot());
       return;
     }
 
@@ -76,7 +76,7 @@ const server = createServer(async (req, res) => {
         "cache-control": "no-cache",
         connection: "keep-alive",
       });
-      res.write(`data: ${JSON.stringify(sim.snapshot())}\n\n`);
+      res.write(`data: ${JSON.stringify(await sim.snapshot())}\n\n`);
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
@@ -96,17 +96,32 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // ── fleet sizing: scale the fleet to N vehicles (1–10) ──
+    if (req.method === "POST" && path === "/api/fleet/size") {
+      const body = await readBody(req);
+      const n = Number(body.size);
+      if (!Number.isFinite(n) || n < FLEET_MIN || n > FLEET_MAX) {
+        return json(res, 400, { error: `size must be ${FLEET_MIN}–${FLEET_MAX}` });
+      }
+      const fleet = await scaleFleet(n);
+      json(res, 200, { ok: true, size: fleet.length });
+      const snap = await sim.snapshot();
+      for (const c of clients) c.write(`data: ${JSON.stringify(snap)}\n\n`);
+      return;
+    }
+
     // ── fleet management: toggle a vehicle's status ──
     if (req.method === "POST" && path === "/api/fleet") {
       const body = await readBody(req);
-      const v = body.id ? store.getVehicle(body.id) : undefined;
+      const v = body.id ? await store.getVehicle(body.id) : undefined;
       if (!v) return json(res, 404, { error: "vehicle not found" });
       const status = body.status as VehicleStatus;
       if (!["idle", "busy", "offline"].includes(status)) return json(res, 400, { error: "bad status" });
-      store.setVehicle({ ...v, status });
+      await store.setVehicle({ ...v, status });
       json(res, 200, { ok: true });
       // reflect the change immediately
-      for (const c of clients) c.write(`data: ${JSON.stringify(sim.snapshot())}\n\n`);
+      const snap = await sim.snapshot();
+      for (const c of clients) c.write(`data: ${JSON.stringify(snap)}\n\n`);
       return;
     }
 
@@ -117,8 +132,16 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  sim.start();
-  console.error(`otto dashboard on http://localhost:${PORT}  (sim tick ${sim.tickMs}ms)`);
-  if (!config.mapboxToken) console.error("warning: MAPBOX_TOKEN unset — map tiles will not render.");
+async function boot(): Promise<void> {
+  await seedFleet(); // populate demo fleet before the first snapshot
+  server.listen(PORT, () => {
+    sim.start();
+    console.error(`otto dashboard on http://localhost:${PORT}  (sim tick ${sim.tickMs}ms)`);
+    if (!config.mapboxToken) console.error("warning: MAPBOX_TOKEN unset — map tiles will not render.");
+  });
+}
+
+boot().catch((e) => {
+  console.error("Fatal:", e);
+  process.exit(1);
 });

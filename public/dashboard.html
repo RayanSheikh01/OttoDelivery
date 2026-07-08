@@ -88,6 +88,35 @@
   .stat.amber .n { color: var(--amber); }
   .stat.green .n { color: var(--idle); }
 
+  /* ── fleet scaler ── */
+  .scaler {
+    display: flex; align-items: center; gap: 10px; margin-left: 26px;
+    padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--panel-2);
+  }
+  .scaler label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .scaler input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 118px; height: 4px;
+    border-radius: 2px; background: var(--line); outline: none; cursor: pointer;
+  }
+  .scaler input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--amber); border: 2px solid var(--bg);
+    cursor: pointer;
+  }
+  .scaler input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: var(--amber);
+    border: 2px solid var(--bg); cursor: pointer;
+  }
+  .scaler input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  .scaler .scaler-val {
+    font-family: var(--mono); font-size: 15px; font-weight: 600;
+    color: var(--amber); min-width: 16px; text-align: center;
+  }
+
   .controls { display: flex; gap: 8px; margin-left: 26px; }
   button {
     font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
@@ -237,6 +266,12 @@
     <div class="stat"><div class="n" id="stBusy">0</div><div class="l">On Route</div></div>
   </div>
 
+  <div class="scaler">
+    <label for="fleetSize">Fleet</label>
+    <input type="range" id="fleetSize" min="1" max="10" step="1" value="5" />
+    <span class="scaler-val" id="fleetSizeVal">5</span>
+  </div>
+
   <div class="controls">
     <button id="btnToggle" class="primary">Pause</button>
     <button id="btnSpawn">+ Order</button>
@@ -314,6 +349,9 @@ let map = null, mapReady = false;
 
 async function boot() {
   const cfg = await fetch("/api/config").then(r => r.json());
+  const slider = document.getElementById("fleetSize");
+  if (Number.isFinite(cfg.fleetMin)) slider.min = cfg.fleetMin;
+  if (Number.isFinite(cfg.fleetMax)) slider.max = cfg.fleetMax;
   if (cfg.mapboxToken) {
     initMap(cfg);
   } else {
@@ -386,6 +424,7 @@ function render(snap) {
   document.getElementById("stIdle").textContent = vehicles.filter(v => v.status === "idle").length;
   document.getElementById("stBusy").textContent = vehicles.filter(v => v.status === "busy").length;
 
+  syncFleetSlider(vehicles.length);
   renderFleet(vehicles);
   renderOrders(orders);
   renderAgents(orders);
@@ -491,6 +530,29 @@ function renderMap(orders, byId) {
   }
   map.getSource("lines").setData(fc(lines));
 }
+
+// ── fleet scaler ──
+let fleetDragging = false; // don't clobber the thumb while the user drags it
+const fleetSlider = document.getElementById("fleetSize");
+const fleetVal = document.getElementById("fleetSizeVal");
+
+// Keep the slider in step with the live fleet size, except while dragging.
+function syncFleetSlider(size) {
+  if (fleetDragging) return;
+  fleetSlider.value = size;
+  fleetVal.textContent = size;
+}
+
+fleetSlider.addEventListener("input", () => {
+  fleetDragging = true;
+  fleetVal.textContent = fleetSlider.value;
+});
+fleetSlider.addEventListener("change", async () => {
+  const size = Number(fleetSlider.value);
+  await fetch("/api/fleet/size", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ size }) });
+  fleetDragging = false;
+});
 
 const post = a => fetch("/api/sim/" + a, { method: "POST" });
 document.getElementById("btnToggle").addEventListener("click", () =>
