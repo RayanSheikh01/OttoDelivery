@@ -57,11 +57,24 @@ export const store = {
         eta: null,
       } as Order);
 
+    const nextStatus: OrderStatus =
+      status ?? (fields?.status as OrderStatus) ?? base.status;
+    // Append a history entry on the first write and on every status change.
+    // upsertOrder is the single mutation point, so the simulator and the real
+    // agents (via state.write) both get recorded with no caller changes.
+    const prevHistory = base.status_history ?? [];
+    const status_history =
+      prevHistory.length === 0 ||
+      prevHistory[prevHistory.length - 1].status !== nextStatus
+        ? [...prevHistory, { status: nextStatus, at: now() }]
+        : prevHistory;
+
     const next: Order = {
       ...base,
       ...(fields ?? {}),
       order_id: id, // never let a patch rewrite identity
-      status: status ?? (fields?.status as OrderStatus) ?? base.status,
+      status: nextStatus,
+      status_history, // after the fields spread so a patch can't clobber it
       updated_at: now(),
       created_at: base.created_at,
     };

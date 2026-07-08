@@ -41,6 +41,11 @@ export interface TransactionLog {
   ref?: string; // charge id a refund points back at
 }
 
+export interface StatusChange {
+  status: OrderStatus;
+  at: string;
+}
+
 export interface Order {
   order_id: string;
   status: OrderStatus;
@@ -50,6 +55,7 @@ export interface Order {
   drop_address?: string;
   assigned_vehicle?: string | null;
   eta?: string | null;
+  status_history?: StatusChange[];
   notifications: NotificationLog[];
   transactions: TransactionLog[];
   created_at: string;
