@@ -1,0 +1,244 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Otto
+      - generic [ref=e5]: Dispatch Console
+    - generic [ref=e8]: Live
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: "6"
+        - generic [ref=e12]: In Flight
+      - generic [ref=e13]:
+        - generic [ref=e14]: "9"
+        - generic [ref=e15]: Delivered
+      - generic [ref=e16]:
+        - generic [ref=e17]: "0"
+        - generic [ref=e18]: Idle Units
+      - generic [ref=e19]:
+        - generic [ref=e20]: "5"
+        - generic [ref=e21]: On Route
+    - generic [ref=e22]:
+      - generic [ref=e23]: Fleet
+      - slider "Fleet" [ref=e24] [cursor=pointer]: "5"
+      - generic [ref=e25]: "5"
+    - generic [ref=e26]:
+      - button "Pause" [ref=e27] [cursor=pointer]
+      - button "+ Order" [ref=e28] [cursor=pointer]
+      - button "Reset" [ref=e29] [cursor=pointer]
+  - main [ref=e30]:
+    - generic [ref=e31]:
+      - complementary [ref=e32]:
+        - generic [ref=e33]:
+          - text: Fleet
+          - generic [ref=e34]: "5"
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - generic [ref=e38]: veh-001
+              - generic [ref=e39]: courier
+            - generic "click to toggle offline" [ref=e40] [cursor=pointer]: busy
+            - generic [ref=e41]: cap 2 · → ord-0012
+          - generic [ref=e42]:
+            - generic [ref=e43]:
+              - generic [ref=e44]: veh-002
+              - generic [ref=e45]: car
+            - generic "click to toggle offline" [ref=e46] [cursor=pointer]: busy
+            - generic [ref=e47]: cap 7 · → ord-0011
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]: veh-003
+              - generic [ref=e51]: van
+            - generic "click to toggle offline" [ref=e52] [cursor=pointer]: busy
+            - generic [ref=e53]: cap 19 · → ord-0013
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - generic [ref=e56]: veh-004
+              - generic [ref=e57]: drone
+            - generic "click to toggle offline" [ref=e58] [cursor=pointer]: busy
+            - generic [ref=e59]: cap 0 · → ord-0009
+          - generic [ref=e60]:
+            - generic [ref=e61]:
+              - generic [ref=e62]: veh-005
+              - generic [ref=e63]: car
+            - generic "click to toggle offline" [ref=e64] [cursor=pointer]: busy
+            - generic [ref=e65]: cap 8 · unassigned
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - generic [ref=e68]: idle unit
+          - generic [ref=e70]: on route
+          - generic [ref=e72]: drop pending
+          - generic [ref=e74]: exception
+        - button "✕" [ref=e79] [cursor=pointer]
+        - region "Map" [ref=e81]
+        - link "Mapbox homepage" [ref=e83] [cursor=pointer]:
+          - /url: https://www.mapbox.com/
+      - complementary [ref=e84]:
+        - generic [ref=e85]:
+          - text: Order Feed
+          - generic [ref=e86]: "6"
+        - generic [ref=e87]:
+          - generic [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]:
+              - generic [ref=e90]: ord-0013
+              - generic [ref=e91]: out for delivery
+            - generic [ref=e92]: 1× Croissant, 1× Margherita Pizza, 1× Caesar Salad
+            - generic [ref=e93]:
+              - generic [ref=e94]: unit veh-003
+              - generic [ref=e95]: 249 Demo St
+          - generic [ref=e96] [cursor=pointer]:
+            - generic [ref=e97]:
+              - generic [ref=e98]: ord-0015
+              - generic [ref=e99]: routed
+            - generic [ref=e100]: 2× Ramen, 2× Falafel Wrap
+            - generic [ref=e101]:
+              - generic [ref=e102]: —
+              - generic [ref=e103]: 388 Demo St
+          - generic [ref=e104] [cursor=pointer]:
+            - generic [ref=e105]:
+              - generic [ref=e106]: ord-0011
+              - generic [ref=e107]: out for delivery
+            - generic [ref=e108]: 2× Burrito Bowl, 1× Sushi Platter, 1× Fried Chicken
+            - generic [ref=e109]:
+              - generic [ref=e110]: unit veh-002
+              - generic [ref=e111]: 880 Demo St
+          - generic [ref=e112] [cursor=pointer]:
+            - generic [ref=e113]:
+              - generic [ref=e114]: ord-0012
+              - generic [ref=e115]: out for delivery
+            - generic [ref=e116]: 1× Tacos al Pastor
+            - generic [ref=e117]:
+              - generic [ref=e118]: unit veh-001
+              - generic [ref=e119]: 766 Demo St
+          - generic [ref=e120] [cursor=pointer]:
+            - generic [ref=e121]:
+              - generic [ref=e122]: ord-0008
+              - generic [ref=e123]: delivered
+            - generic [ref=e124]: 2× Iced Latte
+            - generic [ref=e125]:
+              - generic [ref=e126]: unit veh-003
+              - generic [ref=e127]: 506 Demo St
+          - generic [ref=e128] [cursor=pointer]:
+            - generic [ref=e129]:
+              - generic [ref=e130]: ord-0005
+              - generic [ref=e131]: delivered
+            - generic [ref=e132]: 2× Caesar Salad, 2× Dumplings
+            - generic [ref=e133]:
+              - generic [ref=e134]: unit veh-001
+              - generic [ref=e135]: 377 Demo St
+          - generic [ref=e136] [cursor=pointer]:
+            - generic [ref=e137]:
+              - generic [ref=e138]: ord-0014
+              - generic [ref=e139]: routed
+            - generic [ref=e140]: 1× Croissant
+            - generic [ref=e141]:
+              - generic [ref=e142]: —
+              - generic [ref=e143]: 134 Demo St
+          - generic [ref=e144] [cursor=pointer]:
+            - generic [ref=e145]:
+              - generic [ref=e146]: ord-0010
+              - generic [ref=e147]: delivered
+            - generic [ref=e148]: 2× Dumplings
+            - generic [ref=e149]:
+              - generic [ref=e150]: unit veh-002
+              - generic [ref=e151]: 247 Demo St
+          - generic [ref=e152] [cursor=pointer]:
+            - generic [ref=e153]:
+              - generic [ref=e154]: ord-0009
+              - generic [ref=e155]: out for delivery
+            - generic [ref=e156]: 2× Margherita Pizza, 1× Margherita Pizza
+            - generic [ref=e157]:
+              - generic [ref=e158]: unit veh-004
+              - generic [ref=e159]: 282 Demo St
+          - generic [ref=e160] [cursor=pointer]:
+            - generic [ref=e161]:
+              - generic [ref=e162]: ord-0003
+              - generic [ref=e163]: delivered
+            - generic [ref=e164]: 1× Bubble Tea
+            - generic [ref=e165]:
+              - generic [ref=e166]: unit veh-002
+              - generic [ref=e167]: 533 Demo St
+          - generic [ref=e168] [cursor=pointer]:
+            - generic [ref=e169]:
+              - generic [ref=e170]: ord-0006
+              - generic [ref=e171]: delivered
+            - generic [ref=e172]: 1× Tacos al Pastor
+            - generic [ref=e173]:
+              - generic [ref=e174]: unit veh-003
+              - generic [ref=e175]: 898 Demo St
+          - generic [ref=e176] [cursor=pointer]:
+            - generic [ref=e177]:
+              - generic [ref=e178]: ord-0007
+              - generic [ref=e179]: delivered
+            - generic [ref=e180]: 1× Poke Bowl, 1× Bubble Tea
+            - generic [ref=e181]:
+              - generic [ref=e182]: unit veh-004
+              - generic [ref=e183]: 444 Demo St
+          - generic [ref=e184] [cursor=pointer]:
+            - generic [ref=e185]:
+              - generic [ref=e186]: ord-0001
+              - generic [ref=e187]: delivered
+            - generic [ref=e188]: 1× Sushi Platter, 1× Burrito Bowl
+            - generic [ref=e189]:
+              - generic [ref=e190]: unit veh-004
+              - generic [ref=e191]: 205 Demo St
+          - generic [ref=e192] [cursor=pointer]:
+            - generic [ref=e193]:
+              - generic [ref=e194]: ord-0004
+              - generic [ref=e195]: delivered
+            - generic [ref=e196]: 1× Burrito Bowl, 2× Croissant
+            - generic [ref=e197]:
+              - generic [ref=e198]: unit veh-003
+              - generic [ref=e199]: 542 Demo St
+          - generic [ref=e200] [cursor=pointer]:
+            - generic [ref=e201]:
+              - generic [ref=e202]: ord-0002
+              - generic [ref=e203]: delivered
+            - generic [ref=e204]: 1× Fried Chicken
+            - generic [ref=e205]:
+              - generic [ref=e206]: unit veh-001
+              - generic [ref=e207]: 158 Demo St
+    - generic [ref=e208]:
+      - generic [ref=e209]: Agent Pipeline
+      - generic [ref=e210]:
+        - generic [ref=e211]:
+          - generic [ref=e212]:
+            - generic [ref=e214]: Orchestrator
+            - generic [ref=e215]: "6"
+          - generic [ref=e216]: supervising 6 · 9 done
+          - generic [ref=e217]: delivery-orchestrator
+        - generic [ref=e218]:
+          - generic [ref=e221]: Order Intake
+          - generic [ref=e222]: idle
+          - generic [ref=e223]: order-intake
+        - generic [ref=e224]:
+          - generic [ref=e225]:
+            - generic [ref=e227]: Routing
+            - generic [ref=e228]: "2"
+          - generic [ref=e229]: planning 2 route(s)
+          - generic [ref=e230]: routing-planner
+        - generic [ref=e231]:
+          - generic [ref=e234]: Dispatch
+          - generic [ref=e235]: idle
+          - generic [ref=e236]: fleet-dispatch
+        - generic [ref=e237]:
+          - generic [ref=e238]:
+            - generic [ref=e240]: Tracker
+            - generic [ref=e241]: "4"
+          - generic [ref=e242]: tracking 4 en route
+          - generic [ref=e243]: delivery-tracker
+        - generic [ref=e244]:
+          - generic [ref=e247]: Exceptions
+          - generic [ref=e248]: no exceptions
+          - generic [ref=e249]: exception-recovery
+        - generic [ref=e250]:
+          - generic [ref=e251]:
+            - generic [ref=e253]: Comms
+            - generic [ref=e254]: "22"
+          - generic [ref=e255]: 22 update(s) sent
+          - generic [ref=e256]: customer-comms
+        - generic [ref=e257]:
+          - generic [ref=e258]:
+            - generic [ref=e260]: Payments
+            - generic [ref=e261]: "9"
+          - generic [ref=e262]: 9 charge(s) settled
+          - generic [ref=e263]: payment-settlement

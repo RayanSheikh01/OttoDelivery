@@ -1,0 +1,48 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - generic [ref=f2e4]: Otto
+      - generic [ref=f2e5]: Dispatch Console
+    - generic [ref=f2e8]: Live
+    - generic [ref=f2e9]:
+      - generic [ref=f2e10]:
+        - generic [ref=f2e11]: "0"
+        - generic [ref=f2e12]: In Flight
+      - generic [ref=f2e13]:
+        - generic [ref=f2e14]: "0"
+        - generic [ref=f2e15]: Delivered
+      - generic [ref=f2e16]:
+        - generic [ref=f2e17]: "0"
+        - generic [ref=f2e18]: Idle Units
+      - generic [ref=f2e19]:
+        - generic [ref=f2e20]: "0"
+        - generic [ref=f2e21]: On Route
+    - generic [ref=f2e22]:
+      - generic [ref=f2e23]: Fleet
+      - slider "Fleet" [ref=f2e24] [cursor=pointer]: "5"
+      - generic [ref=f2e25]: "5"
+    - generic [ref=f2e26]:
+      - button "Pause" [ref=f2e27] [cursor=pointer]
+      - button "+ Order" [ref=f2e28] [cursor=pointer]
+      - button "Reset" [ref=f2e29] [cursor=pointer]
+  - main [ref=f2e30]:
+    - generic [ref=f2e31]:
+      - complementary [ref=f2e32]:
+        - generic [ref=f2e33]:
+          - text: Fleet
+          - generic [ref=f2e34]: "0"
+      - generic [ref=f2e36]:
+        - generic [ref=f2e37]:
+          - generic [ref=f2e38]: idle unit
+          - generic [ref=f2e40]: on route
+          - generic [ref=f2e42]: drop pending
+          - generic [ref=f2e44]: exception
+        - button "✕" [ref=f2e49] [cursor=pointer]
+        - region "Map" [ref=f2e51]
+        - link "Mapbox homepage" [ref=f2e53] [cursor=pointer]:
+          - /url: https://www.mapbox.com/
+      - complementary [ref=f2e54]:
+        - generic [ref=f2e55]:
+          - text: Order Feed
+          - generic [ref=f2e56]: "0"
+    - generic [ref=f2e59]: Agent Pipeline

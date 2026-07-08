@@ -1,0 +1,164 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - generic [ref=f1e4]: Otto
+      - generic [ref=f1e5]: Dispatch Console
+    - generic [ref=f1e8]: Live
+    - generic [ref=f1e9]:
+      - generic [ref=f1e10]:
+        - generic [ref=f1e11]: "5"
+        - generic [ref=f1e12]: In Flight
+      - generic [ref=f1e13]:
+        - generic [ref=f1e14]: "0"
+        - generic [ref=f1e15]: Delivered
+      - generic [ref=f1e16]:
+        - generic [ref=f1e17]: "0"
+        - generic [ref=f1e18]: Idle Units
+      - generic [ref=f1e19]:
+        - generic [ref=f1e20]: "5"
+        - generic [ref=f1e21]: On Route
+    - generic [ref=f1e22]:
+      - generic [ref=f1e23]: Fleet
+      - slider "Fleet" [ref=f1e24] [cursor=pointer]: "5"
+      - generic [ref=f1e25]: "5"
+    - generic [ref=f1e26]:
+      - button "Pause" [ref=f1e27] [cursor=pointer]
+      - button "+ Order" [ref=f1e28] [cursor=pointer]
+      - button "Reset" [ref=f1e29] [cursor=pointer]
+  - main [ref=f1e30]:
+    - generic [ref=f1e31]:
+      - complementary [ref=f1e32]:
+        - generic [ref=f1e33]:
+          - text: Fleet
+          - generic [ref=f1e34]: "5"
+        - generic [ref=f1e35]:
+          - generic [ref=f1e36]:
+            - generic [ref=f1e37]:
+              - generic [ref=f1e38]: veh-001
+              - generic [ref=f1e39]: courier
+            - generic "click to toggle offline" [ref=f1e40] [cursor=pointer]: busy
+            - generic [ref=f1e41]: cap 2 · → ord-0002
+          - generic [ref=f1e42]:
+            - generic [ref=f1e43]:
+              - generic [ref=f1e44]: veh-002
+              - generic [ref=f1e45]: car
+            - generic "click to toggle offline" [ref=f1e46] [cursor=pointer]: busy
+            - generic [ref=f1e47]: cap 7 · → ord-0003
+          - generic [ref=f1e48]:
+            - generic [ref=f1e49]:
+              - generic [ref=f1e50]: veh-003
+              - generic [ref=f1e51]: van
+            - generic "click to toggle offline" [ref=f1e52] [cursor=pointer]: busy
+            - generic [ref=f1e53]: cap 19 · → ord-0004
+          - generic [ref=f1e54]:
+            - generic [ref=f1e55]:
+              - generic [ref=f1e56]: veh-004
+              - generic [ref=f1e57]: drone
+            - generic "click to toggle offline" [ref=f1e58] [cursor=pointer]: busy
+            - generic [ref=f1e59]: cap 0 · → ord-0001
+          - generic [ref=f1e60]:
+            - generic [ref=f1e61]:
+              - generic [ref=f1e62]: veh-005
+              - generic [ref=f1e63]: car
+            - generic "click to toggle offline" [ref=f1e64] [cursor=pointer]: busy
+            - generic [ref=f1e65]: cap 8 · unassigned
+      - generic [ref=f1e66]:
+        - generic [ref=f1e67]:
+          - generic [ref=f1e68]: idle unit
+          - generic [ref=f1e70]: on route
+          - generic [ref=f1e72]: drop pending
+          - generic [ref=f1e74]: exception
+        - button "✕" [ref=f1e79] [cursor=pointer]
+        - region "Map" [ref=f1e81]
+        - link "Mapbox homepage" [ref=f1e83] [cursor=pointer]:
+          - /url: https://www.mapbox.com/
+      - complementary [ref=f1e84]:
+        - generic [ref=f1e85]:
+          - text: Order Feed
+          - generic [ref=f1e86]: "5"
+        - generic [ref=f1e87]:
+          - generic [ref=f1e88] [cursor=pointer]:
+            - generic [ref=f1e89]:
+              - generic [ref=f1e90]: ord-0003
+              - generic [ref=f1e91]: out for delivery
+            - generic [ref=f1e92]: 1× Ramen, 1× Bubble Tea, 2× Bubble Tea
+            - generic [ref=f1e93]:
+              - generic [ref=f1e94]: unit veh-002
+              - generic [ref=f1e95]: 315 Demo St
+          - generic [ref=f1e96] [cursor=pointer]:
+            - generic [ref=f1e97]:
+              - generic [ref=f1e98]: ord-0004
+              - generic [ref=f1e99]: assigned
+            - generic [ref=f1e100]: 2× Margherita Pizza
+            - generic [ref=f1e101]:
+              - generic [ref=f1e102]: unit veh-003
+              - generic [ref=f1e103]: 276 Demo St
+          - generic [ref=f1e104] [cursor=pointer]:
+            - generic [ref=f1e105]:
+              - generic [ref=f1e106]: ord-0005
+              - generic [ref=f1e107]: routed
+            - generic [ref=f1e108]: 2× Croissant, 2× Falafel Wrap
+            - generic [ref=f1e109]:
+              - generic [ref=f1e110]: —
+              - generic [ref=f1e111]: 290 Demo St
+          - generic [ref=f1e112] [cursor=pointer]:
+            - generic [ref=f1e113]:
+              - generic [ref=f1e114]: ord-0002
+              - generic [ref=f1e115]: out for delivery
+            - generic [ref=f1e116]: 1× Poke Bowl, 1× Burrito Bowl
+            - generic [ref=f1e117]:
+              - generic [ref=f1e118]: unit veh-001
+              - generic [ref=f1e119]: 529 Demo St
+          - generic [ref=f1e120] [cursor=pointer]:
+            - generic [ref=f1e121]:
+              - generic [ref=f1e122]: ord-0001
+              - generic [ref=f1e123]: out for delivery
+            - generic [ref=f1e124]: 2× Falafel Wrap
+            - generic [ref=f1e125]:
+              - generic [ref=f1e126]: unit veh-004
+              - generic [ref=f1e127]: 773 Demo St
+    - generic [ref=f1e128]:
+      - generic [ref=f1e129]: Agent Pipeline
+      - generic [ref=f1e130]:
+        - generic [ref=f1e131]:
+          - generic [ref=f1e132]:
+            - generic [ref=f1e134]: Orchestrator
+            - generic [ref=f1e135]: "5"
+          - generic [ref=f1e136]: supervising 5 · 0 done
+          - generic [ref=f1e137]: delivery-orchestrator
+        - generic [ref=f1e138]:
+          - generic [ref=f1e141]: Order Intake
+          - generic [ref=f1e142]: idle
+          - generic [ref=f1e143]: order-intake
+        - generic [ref=f1e144]:
+          - generic [ref=f1e145]:
+            - generic [ref=f1e147]: Routing
+            - generic [ref=f1e148]: "1"
+          - generic [ref=f1e149]: planning 1 route(s)
+          - generic [ref=f1e150]: routing-planner
+        - generic [ref=f1e151]:
+          - generic [ref=f1e152]:
+            - generic [ref=f1e154]: Dispatch
+            - generic [ref=f1e155]: "1"
+          - generic [ref=f1e156]: assigning 1 order(s)
+          - generic [ref=f1e157]: fleet-dispatch
+        - generic [ref=f1e158]:
+          - generic [ref=f1e159]:
+            - generic [ref=f1e161]: Tracker
+            - generic [ref=f1e162]: "3"
+          - generic [ref=f1e163]: tracking 3 en route
+          - generic [ref=f1e164]: delivery-tracker
+        - generic [ref=f1e165]:
+          - generic [ref=f1e168]: Exceptions
+          - generic [ref=f1e169]: no exceptions
+          - generic [ref=f1e170]: exception-recovery
+        - generic [ref=f1e171]:
+          - generic [ref=f1e172]:
+            - generic [ref=f1e174]: Comms
+            - generic [ref=f1e175]: "3"
+          - generic [ref=f1e176]: 3 update(s) sent
+          - generic [ref=f1e177]: customer-comms
+        - generic [ref=f1e178]:
+          - generic [ref=f1e181]: Payments
+          - generic [ref=f1e182]: idle
+          - generic [ref=f1e183]: payment-settlement
